@@ -13,5 +13,6 @@ serde_bytes = "0.11.17"
 serde_cbor = "0.11.2"
 snap = "1.1.1"
 tokio = "1.45.0"
+turbojpeg = { version = "1.3.3", features = ["image"] }
 zenoh = "1.3.4"
 zstd = { version = "0.13.3", features = ["zstdmt"] }
