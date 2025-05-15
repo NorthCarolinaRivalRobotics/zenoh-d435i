@@ -1,6 +1,7 @@
 use bincode::{Decode, Encode};
 use realsense_rust::{frame::{ColorFrame, DepthFrame, ImageFrame, PixelKind}, kind};
 use serde::{Serialize, Deserialize};
+use snap::raw::{Decoder, Encoder};
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub enum ImageEncoding {
@@ -47,6 +48,14 @@ impl DepthFrameSerializable {
             data: data,
         }
     }
+
+    pub fn encodeAndCompress(&self) -> Vec<u8> {
+        let encoded = bincode::encode_to_vec(&self, bincode::config::standard()).unwrap();
+        // use snap here
+        let mut encoder = Encoder::new();
+        let compressed_encoded = encoder.compress_vec(&encoded).unwrap();
+        compressed_encoded
+    }
 }
 
 
@@ -66,7 +75,19 @@ impl ColorFrameSerializable {
             data: data,
         }
     }
-
+    pub fn encodeAndCompress(&self) -> Vec<u8> {
+        let encoded = bincode::encode_to_vec(&self, bincode::config::standard()).unwrap();
+        // use snap here
+        let mut encoder = Encoder::new();
+        let compressed_encoded = encoder.compress_vec(&encoded).unwrap();
+        compressed_encoded
+    }
+    pub fn decodeAndDecompress(encoded: Vec<u8>) -> Self {
+        let mut decoder = Decoder::new();
+        let decompressed_encoded = decoder.decompress_vec(&encoded).unwrap();
+        let decoded: (Self, usize) = bincode::decode_from_slice(&decompressed_encoded, bincode::config::standard()).unwrap();   
+        decoded.0
+    }
 }
 
 pub fn get_data_from_pixel(pixel: PixelKind<'_>) ->RGB8 {

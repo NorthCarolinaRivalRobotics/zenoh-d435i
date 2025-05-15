@@ -20,22 +20,23 @@ use std::{
     io::{self, Write},
     time::Duration,
 };
+use snap::raw::Encoder;
 
 mod zenoh_types;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), anyhow::Error> {
     let session = zenoh::open(zenoh::Config::default()).await.unwrap();
 
     // Check for depth or color-compatible devices.
     let mut queried_devices = HashSet::new();
     queried_devices.insert(Rs2ProductLine::D400);
-    let context = Context::new()?;
+    let context = Context::new().unwrap();
     let devices = context.query_devices(queried_devices);
     ensure!(!devices.is_empty(), "No devices found");
 
     // create pipeline
-    let pipeline = InactivePipeline::try_from(&context)?;
+    let pipeline = InactivePipeline::try_from(&context).unwrap();
     let mut config = Config::new();
 
     // Check the USB speed of our connection
@@ -59,52 +60,45 @@ async fn main() -> Result<()> {
     }
 
     // Change pipeline's type from InactivePipeline -> ActivePipeline
-    let mut pipeline = pipeline.start(Some(config))?;
-    let mut distance = 0.0;
+    let mut pipeline = pipeline.start(Some(config)).unwrap();
     let mut motion = [0.0, 0.0, 0.0];
 
     // process frames
-    for i in 0..1000 {
+    loop {
         let timeout = Duration::from_millis(500);
         let frames = pipeline.wait(Some(timeout))?;
 
-        if i % 5 == 0 {
-            // Get depth
-            let mut depth_frames = frames.frames_of_type::<DepthFrame>();
-            if !depth_frames.is_empty() {
-                let depth_frame = depth_frames.pop().unwrap();
-                let timestamp = depth_frame.timestamp();
-                let depth_serializable = DepthFrameSerializable::new(depth_frame, timestamp);
-                let encoded = bincode::encode_to_vec(&depth_serializable, bincode::config::standard()).unwrap();
-                println!("depth number of pixels: {}", depth_serializable.data.len());
-                session.put("camera/depth", encoded).await.unwrap();
-            }
+        // Get depth
+        let mut depth_frames = frames.frames_of_type::<DepthFrame>();
+        if !depth_frames.is_empty() {
+            let depth_frame = depth_frames.pop().unwrap();
+            let timestamp = depth_frame.timestamp();
+            let depth_serializable = DepthFrameSerializable::new(depth_frame, timestamp);
+            let encoded = depth_serializable.encodeAndCompress();
+            println!("depth number of pixels: {}", depth_serializable.data.len());
+            session.put("camera/depth", encoded).await.map_err(|e| anyhow::anyhow!(e))?;
+        }
 
-            let mut rgb_frame = frames.frames_of_type::<ColorFrame>();
-            if !rgb_frame.is_empty() {
-                let rgb_frame = rgb_frame.pop().unwrap();
-                let timestamp = rgb_frame.timestamp();
-                let rgb_serializable = ColorFrameSerializable::new(rgb_frame, timestamp);
-                println!("rgb number of pixels: {}", rgb_serializable.data.len());  
-                let encoded = bincode::encode_to_vec(&rgb_serializable, bincode::config::standard()).unwrap();
-                session.put("camera/rgb", encoded).await.unwrap();
-            }
-            // Get gyro
-            let motion_frames = frames.frames_of_type::<GyroFrame>();
-            if !motion_frames.is_empty() {
-                motion = *motion_frames[0].rotational_velocity();
-            }
-
-
+        let mut rgb_frame = frames.frames_of_type::<ColorFrame>();
+        if !rgb_frame.is_empty() {
+            let rgb_frame = rgb_frame.pop().unwrap();
+            let timestamp = rgb_frame.timestamp();
+            let rgb_serializable = ColorFrameSerializable::new(rgb_frame, timestamp);
+            let encoded = rgb_serializable.encodeAndCompress();
+            println!("rgb number of pixels: {}", rgb_serializable.data.len());
+            session.put("camera/rgb", encoded).await.map_err(|e| anyhow::anyhow!(e))?;
+        }
+        // Get gyro
+        let motion_frames = frames.frames_of_type::<GyroFrame>();
+        if !motion_frames.is_empty() {
+            motion = *motion_frames[0].rotational_velocity();
         }
 
         // Print our results
         print!(
-            "\rDistance of center pixel: {:<10} m | Gyro reading: {:<15}, {:<15}, {:<15}",
-            distance, motion[0], motion[1], motion[2]
+            "\rGyro reading: {:<15}, {:<15}, {:<15}",
+            motion[0], motion[1], motion[2]
         );
-        io::stdout().flush().unwrap();
     }
 
-    Ok(())
 }

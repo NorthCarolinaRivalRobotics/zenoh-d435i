@@ -6,10 +6,12 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.98"
 bincode = { version = "2.0.1", features = ["serde"] }
+bytemuck = "1.23.0"
 realsense-rust = "1.2.3"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_bytes = "0.11.17"
 serde_cbor = "0.11.2"
+snap = "1.1.1"
 tokio = "1.45.0"
 zenoh = "1.3.4"
-zstd = "0.13.3"
+zstd = { version = "0.13.3", features = ["zstdmt"] }
