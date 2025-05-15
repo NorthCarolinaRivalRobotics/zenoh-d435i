@@ -17,13 +17,26 @@ pub struct RGB8Local {
     r: u8,
 }
 
+const DEPTH_SCALE_FACTOR: u16 = 8738; // multiply by this to convert meters to u16
+const MINIMUM_DISTANCE_METERS: f32 = 0.5;
+
+pub fn encode_meters_to_u16(meters: f32)     -> u16 {
+    ((meters - MINIMUM_DISTANCE_METERS) * DEPTH_SCALE_FACTOR as f32) as u16
+}
+
+pub fn decode_u16_to_meters(code: u16) -> f32 {
+    (code as f32) / DEPTH_SCALE_FACTOR as f32 + MINIMUM_DISTANCE_METERS
+}
+
+
 #[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
 pub struct DepthFrameSerializable {
     pub width: usize,
     pub height: usize,
     pub timestamp: f64,
-    pub data: Vec<f32>, // distances in meters
+    pub data: Vec<u16>, // distances in meters
 }
+
 
 #[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
 pub struct ColorFrameSerializable {
@@ -42,10 +55,10 @@ pub struct ImageForWire {
 
 impl DepthFrameSerializable {
     pub fn new(frame: DepthFrame, timestamp: f64) -> Self {
-        let mut data: Vec<f32> = Vec::new();
+        let mut data: Vec<u16> = Vec::new();
         for row in 0..frame.height() {
             for col in 0..frame.width() {
-                data.push(frame.distance(col, row).unwrap());
+                data.push(encode_meters_to_u16(frame.distance(col, row).unwrap()));
             }
         }
         Self {
