@@ -1,8 +1,8 @@
 use bincode::{Decode, Encode};
 use realsense_rust::{frame::{ColorFrame, DepthFrame, ImageFrame, PixelKind}, kind};
 use serde::{Serialize, Deserialize};
-use snap::raw::{Decoder, Encoder};
 use turbojpeg::{compress_image, decompress_image, image::{ImageBuffer, Rgb}, OwnedBuf, PixelFormat, Subsamp};
+use zstd::stream::{copy_encode, decode_all, encode_all};
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub enum ImageEncoding {
@@ -71,10 +71,9 @@ impl DepthFrameSerializable {
 
     pub fn encodeAndCompress(&self) -> Vec<u8> {
         let encoded = bincode::encode_to_vec(&self, bincode::config::standard()).unwrap();
-        // use snap here
-        let mut encoder = Encoder::new();
-        let compressed_encoded = encoder.compress_vec(&encoded).unwrap();
-        compressed_encoded
+        let mut result = Vec::new();
+        copy_encode(&encoded[..], &mut result, 6).unwrap();
+        result
     }
 }
 
