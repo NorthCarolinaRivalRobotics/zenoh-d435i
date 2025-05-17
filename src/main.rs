@@ -7,11 +7,7 @@
 
 use anyhow::{ensure, Result};
 use realsense_rust::{
-    config::Config,
-    context::Context,
-    frame::{ColorFrame, DepthFrame, FrameEx, GyroFrame, PoseFrame},
-    kind::{Rs2CameraInfo, Rs2Format, Rs2ProductLine, Rs2StreamKind},
-    pipeline::InactivePipeline,
+    base::Rs2Intrinsics, config::Config, context::Context, frame::{ColorFrame, DepthFrame, FrameEx, GyroFrame, PoseFrame}, kind::{Rs2CameraInfo, Rs2Format, Rs2ProductLine, Rs2StreamKind}, pipeline::InactivePipeline
 };
 use zenoh_types::{get_data_from_pixel, ColorFrameSerializable, DepthFrameSerializable};
 use std::{
@@ -70,35 +66,27 @@ async fn main() -> Result<(), anyhow::Error> {
 
         // Get depth
         let mut depth_frames = frames.frames_of_type::<DepthFrame>();
-        if !depth_frames.is_empty() {
+        let mut rgb_frame = frames.frames_of_type::<ColorFrame>();
+
+        if !depth_frames.is_empty() &&  !rgb_frame.is_empty() {
             let depth_frame = depth_frames.pop().unwrap();
+            let rgb_frame = rgb_frame.pop().unwrap();
             let timestamp = depth_frame.timestamp();
             let depth_serializable = DepthFrameSerializable::new(depth_frame, timestamp);
-            let encoded = depth_serializable.encodeAndCompress();
-            println!("depth number of pixels: {}", depth_serializable.data.len());
-            session.put("camera/depth", encoded).await.map_err(|e| anyhow::anyhow!(e))?;
-        }
-
-        let mut rgb_frame = frames.frames_of_type::<ColorFrame>();
-        if !rgb_frame.is_empty() {
-            let rgb_frame = rgb_frame.pop().unwrap();
+            let encoded_depth = depth_serializable.encodeAndCompress();
             let timestamp = rgb_frame.timestamp();
             let rgb_serializable = ColorFrameSerializable::new(rgb_frame, timestamp);
-            let encoded = rgb_serializable.encodeAndCompress();
-            println!("rgb number of pixels: {}", rgb_serializable.data.len());
-            session.put("camera/rgb", encoded).await.map_err(|e| anyhow::anyhow!(e))?;
+            let encoded_rgb = rgb_serializable.encodeAndCompress();
+            session.put("camera/rgb", encoded_rgb).await.map_err(|e| anyhow::anyhow!(e))?;
+            session.put("camera/depth", encoded_depth).await.map_err(|e| anyhow::anyhow!(e))?;
+
         }
+
         // Get gyro
         let motion_frames = frames.frames_of_type::<GyroFrame>();
         if !motion_frames.is_empty() {
             motion = *motion_frames[0].rotational_velocity();
         }
-
-        // Print our results
-        print!(
-            "\rGyro reading: {:<15}, {:<15}, {:<15}",
-            motion[0], motion[1], motion[2]
-        );
     }
 
 }
