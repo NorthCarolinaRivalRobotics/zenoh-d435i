@@ -1,0 +1,1 @@
+cargo build --release && scp target/aarch64-unknown-linux-gnu/release/zenoh-d435i pi@192.168.1.8:zenoh-d435i
