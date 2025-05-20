@@ -125,3 +125,27 @@ pub fn get_data_from_pixel(pixel: PixelKind<'_>) ->RGB8Local {
         _ => panic!("Unsupported pixel format"),
     }
 }
+
+
+#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
+pub struct MotionFrameData {
+    pub gyro: [f32; 3], // rad/s
+    pub accel: [f32; 3], // m/s^2
+    pub timestamp: f64, // seconds
+}
+
+impl MotionFrameData {
+    pub fn new(gyro: [f32; 3], accel: [f32; 3], timestamp: f64) -> Self {
+        Self { gyro, accel, timestamp }
+    }
+
+    pub fn encodeAndCompress(&self) -> Vec<u8> {
+        let encoded = bincode::encode_to_vec(&self, bincode::config::standard()).unwrap();
+        encoded
+    }
+    pub fn decodeAndDecompress(encoded: Vec<u8>) -> Self {
+        let (wire, _): (MotionFrameData, _) =
+        bincode::decode_from_slice(&encoded, bincode::config::standard()).unwrap();
+        wire
+    }
+}

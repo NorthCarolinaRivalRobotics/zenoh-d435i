@@ -7,9 +7,9 @@
 
 use anyhow::{ensure, Result};
 use realsense_rust::{
-    base::Rs2Intrinsics, config::Config, context::Context, frame::{ColorFrame, DepthFrame, FrameEx, GyroFrame, PoseFrame}, kind::{Rs2CameraInfo, Rs2Format, Rs2ProductLine, Rs2StreamKind}, pipeline::InactivePipeline
+    base::Rs2Intrinsics, config::Config, context::Context, frame::{AccelFrame, ColorFrame, DepthFrame, FrameEx, GyroFrame, PoseFrame}, kind::{Rs2CameraInfo, Rs2Format, Rs2ProductLine, Rs2StreamKind}, pipeline::InactivePipeline
 };
-use zenoh_types::{get_data_from_pixel, ColorFrameSerializable, DepthFrameSerializable};
+use zenoh_types::{get_data_from_pixel, ColorFrameSerializable, DepthFrameSerializable, MotionFrameData};
 use std::{
     collections::HashSet,
     convert::TryFrom,
@@ -57,7 +57,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Change pipeline's type from InactivePipeline -> ActivePipeline
     let mut pipeline = pipeline.start(Some(config)).unwrap();
-    let mut motion = [0.0, 0.0, 0.0];
+    let mut gyro = [0.0, 0.0, 0.0];
+    let mut accel = [0.0, 0.0, 0.0];
 
     // process frames
     loop {
@@ -83,10 +84,18 @@ async fn main() -> Result<(), anyhow::Error> {
         }
 
         // Get gyro
-        let motion_frames = frames.frames_of_type::<GyroFrame>();
-        if !motion_frames.is_empty() {
-            motion = *motion_frames[0].rotational_velocity();
+        let gyro_frames = frames.frames_of_type::<GyroFrame>();
+        let accel_frames = frames.frames_of_type::<AccelFrame>();
+
+        if !gyro_frames.is_empty() && !accel_frames.is_empty() {
+            gyro = *gyro_frames[0].rotational_velocity();
+            accel = *accel_frames[0].acceleration();
+            let timestamp = (gyro_frames[0].timestamp() + accel_frames[0].timestamp()) / 2.0;
+            let motion_frame_data = MotionFrameData::new(gyro, accel, timestamp);
+            let encoded_motion = motion_frame_data.encodeAndCompress();
+            session.put("camera/motion", encoded_motion).await.map_err(|e| anyhow::anyhow!(e))?;
         }
+
     }
 
 }
